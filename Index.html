@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Leitor de Código de Barras - MR Celulares</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Biblioteca de leitura contínua em tempo real -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { background-color: #0b0f19; color: #fff; font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+  <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 text-center">
+    <div class="space-y-1">
+      <h2 class="font-bold text-lg text-sky-400">Leitor de Código de Barras</h2>
+      <p class="text-xs text-slate-400">Aponte a câmera para o código do produto</p>
+    </div>
+    
+    <!-- Visor da câmera em tempo real -->
+    <div id="reader" class="overflow-hidden rounded-xl border border-slate-700 bg-black"></div>
+
+    <button onclick="cancelarLeitura()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm border border-slate-700 transition">
+      Voltar para o Aplicativo
+    </button>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectUrl = urlParams.get('redirect');
+    let html5QrCode = null;
+
+    function retornarAoApp(codigo) {
+      if (html5QrCode && html5QrCode.isScanning) {
+        html5QrCode.stop().then(function() {
+          finalizarRedirecionamento(codigo);
+        }).catch(function() {
+          finalizarRedirecionamento(codigo);
+        });
+      } else {
+        finalizarRedirecionamento(codigo);
+      }
+    }
+
+    function finalizarRedirecionamento(codigo) {
+      if (redirectUrl) {
+        if (codigo) {
+          window.location.href = redirectUrl + (redirectUrl.includes('?') ? '&' : '?') + 'code=' + encodeURIComponent(codigo);
+        } else {
+          window.location.href = redirectUrl;
+        }
+      } else {
+        alert('Código capturado: ' + codigo);
+      }
+    }
+
+    function cancelarLeitura() {
+      retornarAoApp('');
+    }
+
+    window.addEventListener('DOMContentLoaded', function () {
+      html5QrCode = new Html5Qrcode("reader");
+      // Configuração otimizada para leitura rápida de barras e QR
+      const config = { fps: 20, qrbox: { width: 280, height: 140 } };
+
+      html5QrCode.start(
+        { facingMode: "environment" }, 
+        config, 
+        function (decodedText) {
+          // Sucesso! Assim que lê o código, para a câmera e envia para o app
+          retornarAoApp(decodedText);
+        }, 
+        function (errorMessage) {
+          // Ignora erros de frame vazios enquanto procura o código
+        }
+      ).catch(function (err) {
+        alert("Não foi possível aceder à câmara. Verifique se permitiu o acesso nas definições do navegador.");
+      });
+    });
+  </script>
+</body>
+</html>
