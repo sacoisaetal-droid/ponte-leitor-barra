@@ -5,30 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Leitor de Código de Barras - MR Celulares</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Biblioteca profissional de leitura em tempo real (ZXing / Html5-Qrcode) -->
+  <!-- Biblioteca de leitura contínua com suporte a códigos lineares -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { background-color: #0b0f19; color: #fff; font-family: system-ui, sans-serif; }
-    #reader video { object-fit: cover !important; border-radius: 0.75rem; }
+    #reader video { object-fit: cover !important; border-radius: 0.75rem; width: 100% !important; }
   </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
   <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 text-center">
     <div class="space-y-1">
-      <h2 class="font-bold text-lg text-sky-400">Leitor Automático</h2>
-      <p class="text-xs text-slate-400">Aponte para o código de barras. A deteção é automática.</p>
+      <h2 class="font-bold text-lg text-sky-400">Leitor de Código de Barras</h2>
+      <p class="text-xs text-slate-400">Aponte a câmara para o código do produto</p>
     </div>
     
-    <!-- Visor da câmera em tempo real -->
-    <div id="reader" class="w-full h-72 overflow-hidden rounded-xl border border-slate-700 bg-black flex items-center justify-center">
-      <p class="text-xs text-slate-500 animate-pulse">A ligar a câmara...</p>
+    <!-- Visor da câmara -->
+    <div id="reader" class="w-full h-64 overflow-hidden rounded-xl border border-slate-700 bg-black flex flex-col items-center justify-center p-3">
+      <p id="msgCamera" class="text-xs text-slate-400 mb-3">Toque no botão para ativar a câmara:</p>
+      <button id="btnIniciarCam" onclick="iniciarLeitor()" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-xl text-sm shadow-lg shadow-sky-600/30 transition">
+        📷 Ativar Câmara
+      </button>
     </div>
 
     <div id="statusLeitura" class="text-xs text-emerald-400 font-semibold h-5"></div>
 
     <button onclick="cancelarLeitura()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm border border-slate-700 transition">
-      Voltar sem Ler
+      Voltar para o Aplicativo
     </button>
   </div>
 
@@ -41,8 +44,7 @@
     function retornarAoApp(codigo) {
       if (jaLeu) return;
       jaLeu = true;
-      
-      document.getElementById('statusLeitura').textContent = 'Código detetado: ' + codigo + '. A retornar...';
+      document.getElementById('statusLeitura').textContent = 'Código lido: ' + codigo;
 
       if (html5QrCode && html5QrCode.isScanning) {
         html5QrCode.stop().then(function() {
@@ -69,38 +71,44 @@
       retornarAoApp('');
     }
 
-    window.addEventListener('DOMContentLoaded', function () {
+    function iniciarLeitor() {
+      document.getElementById('btnIniciarCam').style.display = 'none';
+      document.getElementById('msgCamera').textContent = 'A ligar a câmara...';
+
       html5QrCode = new Html5Qrcode("reader");
       
-      // Configuração para varrimento contínuo de alta precisão
+      // Configuração para códigos de barras de embalagens e produtos (EAN-13, EAN-8, CODE_128)
       const config = { 
-        fps: 20, 
-        qrbox: { width: 260, height: 120 },
-        aspectRatio: 1.0
+        fps: 25, 
+        qrbox: { width: 280, height: 130 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
       };
 
-      // Tenta iniciar com a câmara traseira (environment)
       html5QrCode.start(
         { facingMode: "environment" }, 
         config, 
         function (decodedText) {
-          // Sucesso automático! Assim que a câmara reconhece o código de barras
+          // Quando deteta o código em tempo real
           retornarAoApp(decodedText);
         }, 
-        function (errorMessage) {
-          // Ignora os erros de frames onde o código ainda não está no foco
-        }
+        function (errorMessage) {}
       ).catch(function (err) {
-        // Se falhar a câmara traseira direta, tenta iniciar com qualquer câmara disponível
-        html5QrCode.start(
-          { facingMode: "user" }, 
-          config, 
-          function (decodedText) { retornarAoApp(decodedText); }, 
-          function (err2) {}
-        ).catch(function (e) {
-          alert("Não foi possível aceder à câmara. Verifique se permitiu o uso da câmara nas definições do navegador.");
-        });
+        alert("Erro ao abrir a câmara. Certifique-se de que deu permissão no seu navegador.");
+        document.getElementById('btnIniciarCam').style.display = 'inline-block';
+        document.getElementById('msgCamera').textContent = 'Toque para tentar novamente:';
       });
+    }
+
+    // Tenta iniciar automaticamente ao carregar
+    window.addEventListener('DOMContentLoaded', function () {
+      setTimeout(iniciarLeitor, 300);
     });
   </script>
 </body>
