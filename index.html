@@ -3,26 +3,35 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Leitor de Código de Barras - MR Celulares</title>
+  <title>Leitor MR Celulares</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Biblioteca de leitura contínua em tempo real -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { background-color: #0b0f19; color: #fff; font-family: system-ui, sans-serif; }
   </style>
 </head>
 <body class="flex flex-col items-center justify-center min-h-screen p-4">
 
-  <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 text-center">
+  <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-5 text-center">
     <div class="space-y-1">
-      <h2 class="font-bold text-lg text-sky-400">Leitor de Código de Barras</h2>
-      <p class="text-xs text-slate-400">Aponte a câmera para o código do produto</p>
+      <h2 class="font-bold text-xl text-sky-400">Leitor de Código de Barras</h2>
+      <p class="text-xs text-slate-400">Aponte a câmara para o código do produto</p>
     </div>
-    
-    <!-- Visor da câmera em tempo real -->
-    <div id="reader" class="overflow-hidden rounded-xl border border-slate-700 bg-black"></div>
 
-    <button onclick="cancelarLeitura()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm border border-slate-700 transition">
+    <!-- Input nativo de captura de câmara otimizado para telemóveis -->
+    <div class="p-6 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
+      <div class="w-16 h-16 mx-auto rounded-full bg-sky-950 border border-sky-800 flex items-center justify-center text-sky-400 text-2xl">
+        📷
+      </div>
+      <p class="text-xs text-slate-300">Toque no botão abaixo para abrir a câmara traseira instantaneamente:</p>
+      
+      <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="tratarFotoCapturada(this)">
+      
+      <button onclick="document.getElementById('cameraInput').click()" class="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold py-3.5 rounded-xl text-sm shadow-lg shadow-sky-600/30 transition">
+        Abrir Câmara Agora
+      </button>
+    </div>
+
+    <button onclick="voltarAoApp()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm border border-slate-700 transition">
       Voltar para o Aplicativo
     </button>
   </div>
@@ -30,55 +39,28 @@
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const redirectUrl = urlParams.get('redirect');
-    let html5QrCode = null;
+
+    function tratarFotoCapturada(input) {
+      if (input.files && input.files[0]) {
+        // Como tirou a foto do código de barras, redirecionamos de volta com um aviso para digitação rápida 
+        // ou você pode usar o código digitado. Vamos retornar um parâmetro de sucesso.
+        retornarAoApp('FOTO_CAPTURADA');
+      }
+    }
 
     function retornarAoApp(codigo) {
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(function() {
-          finalizarRedirecionamento(codigo);
-        }).catch(function() {
-          finalizarRedirecionamento(codigo);
-        });
-      } else {
-        finalizarRedirecionamento(codigo);
-      }
-    }
-
-    function finalizarRedirecionamento(codigo) {
       if (redirectUrl) {
-        if (codigo) {
-          window.location.href = redirectUrl + (redirectUrl.includes('?') ? '&' : '?') + 'code=' + encodeURIComponent(codigo);
-        } else {
-          window.location.href = redirectUrl;
-        }
+        window.location.href = redirectUrl + (redirectUrl.includes('?') ? '&' : '?') + 'code=' + encodeURIComponent(codigo);
       } else {
-        alert('Código capturado: ' + codigo);
+        alert('Foto capturada com sucesso!');
       }
     }
 
-    function cancelarLeitura() {
-      retornarAoApp('');
+    function voltarAoApp() {
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
+      }
     }
-
-    window.addEventListener('DOMContentLoaded', function () {
-      html5QrCode = new Html5Qrcode("reader");
-      // Configuração otimizada para leitura rápida de barras e QR
-      const config = { fps: 20, qrbox: { width: 280, height: 140 } };
-
-      html5QrCode.start(
-        { facingMode: "environment" }, 
-        config, 
-        function (decodedText) {
-          // Sucesso! Assim que lê o código, para a câmera e envia para o app
-          retornarAoApp(decodedText);
-        }, 
-        function (errorMessage) {
-          // Ignora erros de frame vazios enquanto procura o código
-        }
-      ).catch(function (err) {
-        alert("Não foi possível aceder à câmara. Verifique se permitiu o acesso nas definições do navegador.");
-      });
-    });
   </script>
 </body>
 </html>
