@@ -2,114 +2,136 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Leitor de Código de Barras - MR Celulares</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Biblioteca de leitura contínua com suporte a códigos lineares -->
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1220">
+  <title>Leitor de código de barras — MR Celulares</title>
   <style>
-    body { background-color: #0b0f19; color: #fff; font-family: system-ui, sans-serif; }
-    #reader video { object-fit: cover !important; border-radius: 0.75rem; width: 100% !important; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 18px; min-height: 100vh; background: #0b1220; color: #f8fafc; font-family: Arial, sans-serif; text-align: center; }
+    main { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 6px 0 8px; }
+    p { color: #cbd5e1; font-size: 14px; line-height: 1.45; }
+    .card { background: #111c2e; border: 1px solid #26364e; border-radius: 16px; padding: 16px; margin-top: 14px; }
+    button, input { width: 100%; border-radius: 11px; padding: 14px; font-size: 16px; }
+    button { border: 0; background: #0284c7; color: white; font-weight: 700; margin-top: 10px; cursor: pointer; }
+    input { border: 1px solid #475569; background: #0b1220; color: white; margin-top: 8px; }
+    #interactive.viewport { position: relative; width: 100%; height: auto; overflow: hidden; border-radius: 12px; background: #000; margin-top: 12px; }
+    #interactive.viewport video, canvas { width: 100%; height: 100%; object-fit: cover; }
+    #status { font-size: 14px; margin-top: 10px; white-space: pre-wrap; color: #38bdf8; }
   </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4">
-
-  <div class="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-2xl space-y-4 text-center">
-    <div class="space-y-1">
-      <h2 class="font-bold text-lg text-sky-400">Leitor de Código de Barras</h2>
-      <p class="text-xs text-slate-400">Aponte a câmara para o código do produto</p>
+<body>
+<main>
+  <h1>Leitor de Código de Barras</h1>
+  <p>Aponte a câmera para o código do produto</p>
+  
+  <section class="card">
+    <div id="interactive" class="viewport">
+      <video id="video" autoplay playsinline muted></video>
     </div>
-    
-    <!-- Visor da câmara -->
-    <div id="reader" class="w-full h-64 overflow-hidden rounded-xl border border-slate-700 bg-black flex flex-col items-center justify-center p-3">
-      <p id="msgCamera" class="text-xs text-slate-400 mb-3">Toque no botão para ativar a câmara:</p>
-      <button id="btnIniciarCam" onclick="iniciarLeitor()" class="bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 px-6 rounded-xl text-sm shadow-lg shadow-sky-600/30 transition">
-        📷 Ativar Câmara
-      </button>
-    </div>
+    <p id="status">Iniciando a câmera...</p>
+    <button id="btnVoltar" type="button" onclick="voltarApp()">Voltar para o Aplicativo</button>
+  </section>
 
-    <div id="statusLeitura" class="text-xs text-emerald-400 font-semibold h-5"></div>
+  <section class="card">
+    <label style="font-size: 13px; color: #94a3b8;">Ou digite o código manualmente:</label>
+    <input id="manualCode" inputmode="numeric" placeholder="Digite o código">
+    <button type="button" onclick="enviarManual()">Enviar Código</button>
+  </section>
+</main>
 
-    <button onclick="cancelarLeitura()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-3 rounded-xl text-sm border border-slate-700 transition">
-      Voltar para o Aplicativo
-    </button>
-  </div>
+<!-- Usando a biblioteca QuaggaJS que tem alta compatibilidade móvel -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+  let scannerAtivo = false;
 
-  <script>
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirectUrl = urlParams.get('redirect');
-    let html5QrCode = null;
-    let jaLeu = false;
+  function getRedirectUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('redirect') || '';
+  }
 
-    function retornarAoApp(codigo) {
-      if (jaLeu) return;
-      jaLeu = true;
-      document.getElementById('statusLeitura').textContent = 'Código lido: ' + codigo;
+  function voltarApp() {
+    const redirect = getRedirectUrl();
+    if (redirect) {
+      window.location.href = redirect;
+    } else {
+      window.history.back();
+    }
+  }
 
-      if (html5QrCode && html5QrCode.isScanning) {
-        html5QrCode.stop().then(function() {
-          finalizarRedirecionamento(codigo);
-        }).catch(function() {
-          finalizarRedirecionamento(codigo);
-        });
-      } else {
-        finalizarRedirecionamento(codigo);
+  function enviarCodigo(code) {
+    if (!code) return;
+    pararScanner();
+    const redirect = getRedirectUrl();
+    if (redirect) {
+      const target = new URL(redirect);
+      target.searchParams.set('code', code);
+      window.location.href = target.toString();
+    } else {
+      document.getElementById('status').textContent = 'Código lido: ' + code;
+    }
+  }
+
+  function iniciarScanner() {
+    const constraints = {
+      width: { ideal: 1280 },
+      height: { ideal: 720 },
+      facingMode: "environment" // Tenta usar a câmera traseira no celular
+    };
+
+    Quagga.init({
+      inputStream : {
+        name : "Live",
+        type : "LiveStream",
+        target: document.querySelector('#interactive'),
+        constraints: constraints
+      },
+      decoder : {
+        readers : ["code_128_reader", "ean_reader", "ean_8_reader", "upc_reader", "code_39_reader"]
+      },
+      locate: true
+    }, function(err) {
+      if (err) {
+        document.getElementById('status').textContent = "Erro ao abrir câmera. Verifique as permissões do navegador.";
+        console.error(err);
+        return;
       }
-    }
-
-    function finalizarRedirecionamento(codigo) {
-      if (redirectUrl) {
-        if (codigo) {
-          window.location.href = redirectUrl + (redirectUrl.includes('?') ? '&' : '?') + 'code=' + encodeURIComponent(codigo);
-        } else {
-          window.location.href = redirectUrl;
-        }
-      }
-    }
-
-    function cancelarLeitura() {
-      retornarAoApp('');
-    }
-
-    function iniciarLeitor() {
-      document.getElementById('btnIniciarCam').style.display = 'none';
-      document.getElementById('msgCamera').textContent = 'A ligar a câmara...';
-
-      html5QrCode = new Html5Qrcode("reader");
-      
-      // Configuração para códigos de barras de embalagens e produtos (EAN-13, EAN-8, CODE_128)
-      const config = { 
-        fps: 25, 
-        qrbox: { width: 280, height: 130 },
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.QR_CODE
-        ]
-      };
-
-      html5QrCode.start(
-        { facingMode: "environment" }, 
-        config, 
-        function (decodedText) {
-          // Quando deteta o código em tempo real
-          retornarAoApp(decodedText);
-        }, 
-        function (errorMessage) {}
-      ).catch(function (err) {
-        alert("Erro ao abrir a câmara. Certifique-se de que deu permissão no seu navegador.");
-        document.getElementById('btnIniciarCam').style.display = 'inline-block';
-        document.getElementById('msgCamera').textContent = 'Toque para tentar novamente:';
-      });
-    }
-
-    // Tenta iniciar automaticamente ao carregar
-    window.addEventListener('DOMContentLoaded', function () {
-      setTimeout(iniciarLeitor, 300);
+      Quagga.start();
+      scannerAtivo = true;
+      document.getElementById('status').textContent = "Câmera ativa. Posicione o código de barras.";
     });
-  </script>
+
+    Quagga.onDetected(function(result) {
+      if (result && result.codeResult && result.codeResult.code) {
+        const codigo = result.codeResult.code;
+        enviarCodigo(codigo);
+      }
+    });
+  }
+
+  function pararScanner() {
+    if (scannerAtivo) {
+      try { Quagga.stop(); } catch(e){}
+      scannerAtivo = false;
+    }
+  }
+
+  function enviarManual() {
+    const val = document.getElementById('manualCode').value.trim();
+    if (val) enviarCodigo(val);
+  }
+
+  document.getElementById('manualCode').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') enviarManual();
+  });
+
+  window.addEventListener('load', function() {
+    iniciarScanner();
+  });
+
+  window.addEventListener('pagehide', function() {
+    pararScanner();
+  });
+</script>
 </body>
 </html>
