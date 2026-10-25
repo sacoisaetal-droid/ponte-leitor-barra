@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -6,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#0b1220">
   <title>Leitor de código de barras — MR Celulares</title>
-
   <style>
     * {
       box-sizing: border-box;
     }
-
     body {
       margin: 0;
       padding: 18px;
@@ -21,23 +18,19 @@
       font-family: Arial, sans-serif;
       text-align: center;
     }
-
     main {
       max-width: 560px;
       margin: 0 auto;
     }
-
     h1 {
       font-size: 22px;
       margin: 6px 0 8px;
     }
-
     p {
       color: #cbd5e1;
       font-size: 14px;
       line-height: 1.45;
     }
-
     .card {
       background: #111c2e;
       border: 1px solid #26364e;
@@ -45,7 +38,6 @@
       padding: 16px;
       margin-top: 14px;
     }
-
     button,
     input {
       width: 100%;
@@ -53,7 +45,6 @@
       padding: 14px;
       font-size: 16px;
     }
-
     button {
       border: 0;
       background: #0284c7;
@@ -62,41 +53,19 @@
       margin-top: 10px;
       cursor: pointer;
     }
-
-    button:disabled {
-      opacity: 0.6;
-      cursor: wait;
-    }
-
     input {
       border: 1px solid #475569;
       background: #0b1220;
       color: white;
       margin-top: 8px;
     }
-
-    #interactive {
-      position: relative;
+    #reader {
       width: 100%;
-      min-height: 220px;
-      overflow: hidden;
       border-radius: 12px;
+      overflow: hidden;
       background: #000;
       margin-top: 12px;
     }
-
-    #interactive video,
-    #interactive canvas {
-      display: block;
-      width: 100%;
-      max-width: 100%;
-      height: auto;
-    }
-
-    #interactive video {
-      object-fit: cover;
-    }
-
     #status {
       font-size: 14px;
       margin-top: 10px;
@@ -104,10 +73,10 @@
       overflow-wrap: anywhere;
       color: #38bdf8;
     }
-
     .orientacao {
       color: #94a3b8;
       font-size: 12px;
+      margin-top: 8px;
     }
   </style>
 </head>
@@ -118,10 +87,10 @@
   <p>Aponte a câmera traseira para o código de barras do produto.</p>
 
   <section class="card">
-    <div id="interactive"></div>
+    <div id="reader"></div>
 
     <p id="status">
-      Toque em Iniciar leitor para ativar a câmera.
+      Toque em "Iniciar leitor" para ativar a câmera.
     </p>
 
     <button id="btnIniciar" type="button" onclick="iniciarScanner()">
@@ -156,15 +125,12 @@
   </section>
 </main>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<!-- Biblioteca robusta e moderna para leitura móvel e desktop -->
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
 <script>
-  let scannerAtivo = false;
-  let scannerIniciando = false;
+  let html5QrCode = null;
   let enviandoCodigo = false;
-
-  let codigoCandidato = "";
-  let repeticoesCodigo = 0;
 
   function getRedirectUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -177,7 +143,6 @@
 
   function voltarApp() {
     pararScanner();
-
     const redirect = getRedirectUrl();
 
     if (redirect) {
@@ -189,7 +154,6 @@
 
   function enviarCodigo(code) {
     const codigo = String(code || "").trim();
-
     if (!codigo || enviandoCodigo) return;
 
     enviandoCodigo = true;
@@ -202,10 +166,7 @@
     if (redirect) {
       try {
         const destino = new URL(redirect);
-
-        // Mantém o parâmetro de retorno utilizado pelo aplicativo.
         destino.searchParams.set("code", codigo);
-
         window.location.href = destino.toString();
       } catch (erro) {
         console.error(erro);
@@ -220,168 +181,75 @@
   }
 
   function iniciarScanner() {
-    if (scannerAtivo || scannerIniciando) return;
+    if (html5QrCode) return;
 
-    if (typeof Quagga === "undefined") {
-      atualizarStatus(
-        "A biblioteca do leitor não carregou. Verifique a internet e recarregue a página."
-      );
-      return;
-    }
-
-    scannerIniciando = true;
     enviandoCodigo = false;
-    codigoCandidato = "";
-    repeticoesCodigo = 0;
+    atualizarStatus("Solicitando acesso à câmera...");
 
     const botao = document.getElementById("btnIniciar");
     botao.disabled = true;
-    botao.textContent = "Iniciando câmera...";
+    botao.textContent = "Iniciando...";
 
-    atualizarStatus("Solicitando acesso à câmera...");
+    html5QrCode = new Html5Qrcode("reader");
 
-    Quagga.init({
-      inputStream: {
-        name: "Live",
-        type: "LiveStream",
-        target: document.querySelector("#interactive"),
-        constraints: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        area: {
-          top: "15%",
-          right: "5%",
-          left: "5%",
-          bottom: "15%"
-        }
+    // Configuração inteligente priorizando a câmera traseira (environment)
+    html5QrCode.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 260, height: 140 }
       },
-
-      locator: {
-        patchSize: "medium",
-        halfSample: true
+      function(decodedText, decodedResult) {
+        // Sucesso na leitura
+        enviarCodigo(decodedText);
       },
-
-      decoder: {
-        readers: [
-          "ean_reader",
-          "ean_8_reader",
-          "upc_reader",
-          "upc_e_reader",
-          "code_128_reader",
-          "code_39_reader",
-          "i2of5_reader",
-          "codabar_reader"
-        ]
-      },
-
-      locate: true,
-      frequency: 10
-    }, function(err) {
-      scannerIniciando = false;
-
-      if (err) {
-        console.error("Erro ao iniciar Quagga:", err);
-
-        botao.disabled = false;
-        botao.textContent = "Tentar novamente";
-
-        atualizarStatus(
-          "Não foi possível iniciar a câmera. Confira a permissão da câmera no Chrome e tente novamente."
-        );
-        return;
+      function(errorMessage) {
+        // Erros de varredura por frame (ignorados para não poluir o status)
       }
-
-      try {
-        Quagga.start();
-        scannerAtivo = true;
-
-        botao.disabled = false;
-        botao.textContent = "Leitor ativo";
-
-        atualizarStatus(
-          "Câmera ativa. Enquadre o código de barras e mantenha o celular firme."
-        );
-      } catch (erro) {
-        console.error(erro);
-
-        botao.disabled = false;
-        botao.textContent = "Tentar novamente";
-
-        atualizarStatus("Erro ao ativar o leitor. Tente novamente.");
-      }
+    ).then(() => {
+      botao.disabled = false;
+      botao.textContent = "Parar leitor";
+      botao.setAttribute("onclick", "pararScannerManual()");
+      atualizarStatus("Câmera ativa. Posicione o código de barras.");
+    }).catch(err => {
+      console.error("Erro ao iniciar câmera:", err);
+      html5QrCode = null;
+      botao.disabled = false;
+      botao.textContent = "Iniciar leitor";
+      atualizarStatus("Não foi possível abrir a câmera. Verifique as permissões do navegador.");
     });
   }
 
-  // Só aceita o código após detectar o mesmo resultado várias vezes.
-  QuaggaReady();
-
-  function QuaggaReady() {
-    if (typeof Quagga === "undefined") return;
-
-    Quagga.onDetected(function(result) {
-      if (!scannerAtivo || enviandoCodigo) return;
-      if (!result || !result.codeResult) return;
-
-      const codigo = String(result.codeResult.code || "").trim();
-
-      if (!codigo) return;
-
-      // Ignora resultados que não tenham barras decodificadas.
-      const barras = result.codeResult.decodedCodes || [];
-      const possuiBarrasValidas = barras.some(function(item) {
-        return item && item.error === undefined;
-      });
-
-      if (!possuiBarrasValidas) return;
-
-      if (codigo === codigoCandidato) {
-        repeticoesCodigo++;
-      } else {
-        codigoCandidato = codigo;
-        repeticoesCodigo = 1;
-      }
-
-      atualizarStatus(
-        "Código detectado: " + codigo +
-        "\nConfirmando leitura: " + repeticoesCodigo + "/3"
-      );
-
-      if (repeticoesCodigo >= 3) {
-        enviarCodigo(codigo);
-      }
-    });
+  function pararScannerManual() {
+    pararScanner();
+    atualizarStatus("Leitor pausado.");
   }
 
   function pararScanner() {
-    if (typeof Quagga !== "undefined" && scannerAtivo) {
-      try {
-        Quagga.stop();
-      } catch (erro) {
-        console.warn("Não foi possível parar o leitor:", erro);
-      }
+    if (html5QrCode) {
+      html5QrCode.stop().then(() => {
+        html5QrCode.clear();
+        html5QrCode = null;
+      }).catch(err => {
+        console.warn("Erro ao parar:", err);
+        html5QrCode = null;
+      });
     }
 
-    scannerAtivo = false;
-    scannerIniciando = false;
-
     const botao = document.getElementById("btnIniciar");
-
     if (botao && !enviandoCodigo) {
       botao.disabled = false;
       botao.textContent = "Iniciar leitor";
+      botao.setAttribute("onclick", "iniciarScanner()");
     }
   }
 
   function enviarManual() {
     const valor = document.getElementById("manualCode").value.trim();
-
     if (!valor) {
       atualizarStatus("Digite um código antes de enviar.");
       return;
     }
-
     enviarCodigo(valor);
   }
 
