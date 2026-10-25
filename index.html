@@ -29,32 +29,27 @@
     input {
       border: 1px solid #475569; background: #0b1220; color: white; margin-top: 8px;
     }
+    video {
+      display: block; width: 100%; max-height: 50vh;
+      object-fit: cover; background: #000; border-radius: 12px; margin-top: 12px;
+    }
     #status {
       font-size: 14px; margin-top: 12px; white-space: pre-wrap; color: #38bdf8;
-    }
-    .btn-camera {
-      background: #059669; font-size: 18px; padding: 18px; margin-top: 10px;
     }
   </style>
 </head>
 <body>
 <main>
   <h1>Leitor de Código de Barras</h1>
-  <p>Toque no botão abaixo para abrir a câmera do celular e escanear o código.</p>
+  <p>Aponte a câmera para o código do produto.</p>
 
   <section class="card">
-    <!-- Input nativo invisível acionado pelo botão da câmera -->
-    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="processarFotoCamera(this)">
+    <video id="video" autoplay muted playsinline></video>
     
-    <button type="button" class="btn-camera" onclick="document.getElementById('cameraInput').click()">
-      📷 Abrir Câmera para Escanear
-    </button>
+    <p id="status">Toque em "Iniciar Leitor" abaixo.</p>
 
-    <p id="status">Pronto para escanear.</p>
-
-    <button type="button" style="background: #334155; margin-top: 15px;" onclick="voltarApp()">
-      Voltar para o Aplicativo
-    </button>
+    <button id="btnIniciar" type="button" onclick="iniciarLeitor()">Iniciar Leitor</button>
+    <button type="button" style="background: #334155; margin-top: 10px;" onclick="voltarApp()">Voltar para o Aplicativo</button>
   </section>
 
   <section class="card">
@@ -64,9 +59,13 @@
   </section>
 </main>
 
-<!-- Biblioteca ZXing para leitura de códigos em imagens capturadas -->
-<script src="https://unpkg.com/@zxing/library@latest"></script>
+<!-- Biblioteca oficial ZXing Browser UMD -->
+<script src="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/umd/zxing-browser.min.js"></script>
 <script>
+  let codeReader = null;
+  let controlsRef = null;
+  let lidoComSucesso = false;
+
   function getRedirectUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get("redirect") || "";
@@ -77,6 +76,7 @@
   }
 
   function voltarApp() {
+    pararLeitor();
     const redirect = getRedirectUrl();
     if (redirect) {
       window.location.href = redirect;
@@ -85,11 +85,12 @@
     }
   }
 
-  function enviarCodigo(code) {
-    const codigo = String(code || "").trim();
-    if (!codigo) return;
+  function enviarCodigo(codigo) {
+    if (!codigo || lidoComSucesso) return;
+    lidoComSucesso = true;
+    pararLeitor();
 
-    atualizarStatus("Código lido: " + codigo + "\nRetornando...");
+    atualizarStatus("Código lido: " + codigo + "\nRetornando ao app...");
     const redirect = getRedirectUrl();
 
     if (redirect) {
@@ -98,45 +99,70 @@
         destino.searchParams.set("code", codigo);
         window.location.href = destino.toString();
       } catch (e) {
-        atualizarStatus("Erro ao retornar ao app.");
+        atualizarStatus("Erro ao retornar.");
       }
     } else {
       document.getElementById("manualCode").value = codigo;
     }
   }
 
-  function processarFotoCamera(input) {
-    if (!input.files || !input.files[0]) return;
-    const arquivo = input.files[0];
-    const reader = new FileReader();
+  async function iniciarLeitor() {
+    lidoComSucesso = false;
+    atualizarStatus("Iniciando a câmera traseira...");
+    
+    try {
+      if (!codeReader) {
+        codeReader = new ZXingBrowser.BrowserMultiFormatReader();
+      }
 
-    atualizarStatus("Lendo código da imagem...");
-
-    reader.onload = function(e) {
-      const img = new Image();
-      img.onload = function() {
-        const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-
-        const codeReader = new ZXing.BrowserBarcodeReader();
-        codeReader.decodeFromImage(img).then(result => {
-          if (result && result.text) {
+      // Abre o fluxo de vídeo direcionando especificamente para a câmera traseira do celular
+      controlsRef = await codeReader.decodeFromConstraints(
+        { video: { facingMode: { exact: "environment" } } }, 
+        'video', 
+        (result, err) => {
+          if (result) {
             enviarCodigo(result.text);
-          } else {
-            atualizarStatus("Nenhum código detectado. Tente novamente mais próximo.");
           }
-          input.value = "";
-        }).catch(err => {
-          atualizarStatus("Não foi possível decodificar. Centralize bem o código na foto.");
-          input.value = "";
-        });
-      };
-      img.src = e.target.result;
-    };
-    reader.readAsDataURL(arquivo);
+        }
+      );
+      atualizarStatus("Câmera ativa! Posicione o código de barras na tela.");
+      document.getElementById("btnIniciar").textContent = "Parar Câmera";
+      document.getElementById("btnIniciar").setAttribute("onclick", "pararLeitorManual()");
+
+    } catch (e) {
+      // Fallback caso o celular não aceite o "exact", tenta abrir qualquer câmera disponível
+      try {
+        controlsRef = await codeReader.decodeFromConstraints(
+          { video: { facingMode: "environment" } }, 
+          'video', 
+          (result, err) => {
+            if (result) {
+              enviarCodigo(result.text);
+            }
+          }
+        );
+        atualizarStatus("Câmera ativa!");
+        document.getElementById("btnIniciar").textContent = "Parar Câmera";
+        document.getElementById("btnIniciar").setAttribute("onclick", "pararLeitorManual()");
+      } catch (err2) {
+        atualizarStatus("Não foi possível acessar a câmera. Verifique se o navegador tem permissão.");
+        console.error(err2);
+      }
+    }
+  }
+
+  function pararLeitorManual() {
+    pararLeitor();
+    atualizarStatus("Leitor parado.");
+    document.getElementById("btnIniciar").textContent = "Iniciar Leitor";
+    document.getElementById("btnIniciar").setAttribute("onclick", "iniciarLeitor()");
+  }
+
+  function pararLeitor() {
+    if (controlsRef) {
+      try { controlsRef.stop(); } catch(err){}
+      controlsRef = null;
+    }
   }
 
   function enviarManual() {
@@ -151,6 +177,8 @@
   document.getElementById("manualCode").addEventListener("keydown", function(e) {
     if (e.key === "Enter") enviarManual();
   });
+
+  window.addEventListener("pagehide", pararLeitor);
 </script>
 </body>
 </html>
