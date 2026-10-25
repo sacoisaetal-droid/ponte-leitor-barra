@@ -6,145 +6,78 @@
   <meta name="theme-color" content="#0b1220">
   <title>Leitor de código de barras — MR Celulares</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
     body {
-      margin: 0;
-      padding: 18px;
-      min-height: 100vh;
-      background: #0b1220;
-      color: #f8fafc;
-      font-family: Arial, sans-serif;
-      text-align: center;
+      margin: 0; padding: 18px; min-height: 100vh;
+      background: #0b1220; color: #f8fafc;
+      font-family: Arial, sans-serif; text-align: center;
     }
-    main {
-      max-width: 560px;
-      margin: 0 auto;
-    }
-    h1 {
-      font-size: 22px;
-      margin: 6px 0 8px;
-    }
-    p {
-      color: #cbd5e1;
-      font-size: 14px;
-      line-height: 1.45;
-    }
+    main { max-width: 560px; margin: 0 auto; }
+    h1 { font-size: 22px; margin: 6px 0 8px; }
+    p { color: #cbd5e1; font-size: 14px; line-height: 1.45; }
     .card {
-      background: #111c2e;
-      border: 1px solid #26364e;
-      border-radius: 16px;
-      padding: 16px;
-      margin-top: 14px;
+      background: #111c2e; border: 1px solid #26364e;
+      border-radius: 16px; padding: 16px; margin-top: 14px;
     }
-    button,
-    input {
-      width: 100%;
-      border-radius: 11px;
-      padding: 14px;
-      font-size: 16px;
+    button, input {
+      width: 100%; border-radius: 11px; padding: 14px; font-size: 16px;
     }
     button {
-      border: 0;
-      background: #0284c7;
-      color: white;
-      font-weight: 700;
-      margin-top: 10px;
-      cursor: pointer;
+      border: 0; background: #0284c7; color: white;
+      font-weight: 700; margin-top: 10px; cursor: pointer;
     }
     input {
-      border: 1px solid #475569;
-      background: #0b1220;
-      color: white;
-      margin-top: 8px;
-    }
-    #reader {
-      width: 100%;
-      border-radius: 12px;
-      overflow: hidden;
-      background: #000;
-      margin-top: 12px;
+      border: 1px solid #475569; background: #0b1220; color: white; margin-top: 8px;
     }
     #status {
-      font-size: 14px;
-      margin-top: 10px;
-      white-space: pre-wrap;
-      overflow-wrap: anywhere;
-      color: #38bdf8;
+      font-size: 14px; margin-top: 12px; white-space: pre-wrap; color: #38bdf8;
     }
-    .orientacao {
-      color: #94a3b8;
-      font-size: 12px;
-      margin-top: 8px;
+    .btn-camera {
+      background: #059669; font-size: 18px; padding: 18px; margin-top: 10px;
     }
   </style>
 </head>
-
 <body>
 <main>
   <h1>Leitor de Código de Barras</h1>
-  <p>Aponte a câmera traseira para o código de barras do produto.</p>
+  <p>Toque no botão abaixo para abrir a câmera do celular e escanear o código.</p>
 
   <section class="card">
-    <div id="reader"></div>
-
-    <p id="status">
-      Toque em "Iniciar leitor" para ativar a câmera.
-    </p>
-
-    <button id="btnIniciar" type="button" onclick="iniciarScanner()">
-      Iniciar leitor
+    <!-- Input nativo invisível acionado pelo botão da câmera -->
+    <input type="file" id="cameraInput" accept="image/*" capture="environment" style="display:none;" onchange="processarFotoCamera(this)">
+    
+    <button type="button" class="btn-camera" onclick="document.getElementById('cameraInput').click()">
+      📷 Abrir Câmera para Escanear
     </button>
 
-    <button id="btnVoltar" type="button" onclick="voltarApp()">
+    <p id="status">Pronto para escanear.</p>
+
+    <button type="button" style="background: #334155; margin-top: 15px;" onclick="voltarApp()">
       Voltar para o Aplicativo
     </button>
-
-    <p class="orientacao">
-      Mantenha o código inteiro visível, com boa iluminação e sem reflexos.
-    </p>
   </section>
 
   <section class="card">
-    <label for="manualCode" style="font-size:13px;color:#94a3b8;">
-      Ou digite o código manualmente:
-    </label>
-
-    <input
-      id="manualCode"
-      type="text"
-      inputmode="numeric"
-      autocomplete="off"
-      placeholder="Digite o código de barras"
-    >
-
-    <button type="button" onclick="enviarManual()">
-      Enviar Código
-    </button>
+    <label for="manualCode" style="font-size:13px;color:#94a3b8;">Ou digite o código manualmente:</label>
+    <input id="manualCode" type="text" inputmode="numeric" autocomplete="off" placeholder="Digite o código de barras">
+    <button type="button" onclick="enviarManual()">Enviar Código</button>
   </section>
 </main>
 
-<!-- Biblioteca robusta e moderna para leitura móvel e desktop -->
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-
+<!-- Biblioteca ZXing para leitura de códigos em imagens capturadas -->
+<script src="https://unpkg.com/@zxing/library@latest"></script>
 <script>
-  let html5QrCode = null;
-  let enviandoCodigo = false;
-
   function getRedirectUrl() {
     const params = new URLSearchParams(window.location.search);
     return params.get("redirect") || "";
   }
 
-  function atualizarStatus(mensagem) {
-    document.getElementById("status").textContent = mensagem;
+  function atualizarStatus(msg) {
+    document.getElementById("status").textContent = msg;
   }
 
   function voltarApp() {
-    pararScanner();
     const redirect = getRedirectUrl();
-
     if (redirect) {
       window.location.href = redirect;
     } else {
@@ -154,13 +87,9 @@
 
   function enviarCodigo(code) {
     const codigo = String(code || "").trim();
-    if (!codigo || enviandoCodigo) return;
+    if (!codigo) return;
 
-    enviandoCodigo = true;
-    pararScanner();
-
-    atualizarStatus("Código lido: " + codigo + "\nRetornando ao aplicativo...");
-
+    atualizarStatus("Código lido: " + codigo + "\nRetornando...");
     const redirect = getRedirectUrl();
 
     if (redirect) {
@@ -168,80 +97,46 @@
         const destino = new URL(redirect);
         destino.searchParams.set("code", codigo);
         window.location.href = destino.toString();
-      } catch (erro) {
-        console.error(erro);
-        enviandoCodigo = false;
-        atualizarStatus("Não foi possível retornar ao aplicativo.");
+      } catch (e) {
+        atualizarStatus("Erro ao retornar ao app.");
       }
     } else {
-      enviandoCodigo = false;
       document.getElementById("manualCode").value = codigo;
-      atualizarStatus("Código identificado: " + codigo);
     }
   }
 
-  function iniciarScanner() {
-    if (html5QrCode) return;
+  function processarFotoCamera(input) {
+    if (!input.files || !input.files[0]) return;
+    const arquivo = input.files[0];
+    const reader = new FileReader();
 
-    enviandoCodigo = false;
-    atualizarStatus("Solicitando acesso à câmera...");
+    atualizarStatus("Lendo código da imagem...");
 
-    const botao = document.getElementById("btnIniciar");
-    botao.disabled = true;
-    botao.textContent = "Iniciando...";
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
 
-    html5QrCode = new Html5Qrcode("reader");
-
-    // Configuração inteligente priorizando a câmera traseira (environment)
-    html5QrCode.start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 260, height: 140 }
-      },
-      function(decodedText, decodedResult) {
-        // Sucesso na leitura
-        enviarCodigo(decodedText);
-      },
-      function(errorMessage) {
-        // Erros de varredura por frame (ignorados para não poluir o status)
-      }
-    ).then(() => {
-      botao.disabled = false;
-      botao.textContent = "Parar leitor";
-      botao.setAttribute("onclick", "pararScannerManual()");
-      atualizarStatus("Câmera ativa. Posicione o código de barras.");
-    }).catch(err => {
-      console.error("Erro ao iniciar câmera:", err);
-      html5QrCode = null;
-      botao.disabled = false;
-      botao.textContent = "Iniciar leitor";
-      atualizarStatus("Não foi possível abrir a câmera. Verifique as permissões do navegador.");
-    });
-  }
-
-  function pararScannerManual() {
-    pararScanner();
-    atualizarStatus("Leitor pausado.");
-  }
-
-  function pararScanner() {
-    if (html5QrCode) {
-      html5QrCode.stop().then(() => {
-        html5QrCode.clear();
-        html5QrCode = null;
-      }).catch(err => {
-        console.warn("Erro ao parar:", err);
-        html5QrCode = null;
-      });
-    }
-
-    const botao = document.getElementById("btnIniciar");
-    if (botao && !enviandoCodigo) {
-      botao.disabled = false;
-      botao.textContent = "Iniciar leitor";
-      botao.setAttribute("onclick", "iniciarScanner()");
-    }
+        const codeReader = new ZXing.BrowserBarcodeReader();
+        codeReader.decodeFromImage(img).then(result => {
+          if (result && result.text) {
+            enviarCodigo(result.text);
+          } else {
+            atualizarStatus("Nenhum código detectado. Tente novamente mais próximo.");
+          }
+          input.value = "";
+        }).catch(err => {
+          atualizarStatus("Não foi possível decodificar. Centralize bem o código na foto.");
+          input.value = "";
+        });
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(arquivo);
   }
 
   function enviarManual() {
@@ -253,17 +148,8 @@
     enviarCodigo(valor);
   }
 
-  document.getElementById("manualCode").addEventListener(
-    "keydown",
-    function(evento) {
-      if (evento.key === "Enter") {
-        enviarManual();
-      }
-    }
-  );
-
-  window.addEventListener("pagehide", function() {
-    pararScanner();
+  document.getElementById("manualCode").addEventListener("keydown", function(e) {
+    if (e.key === "Enter") enviarManual();
   });
 </script>
 </body>
