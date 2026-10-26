@@ -15,12 +15,10 @@
     button,input{width:100%;border-radius:11px;padding:14px;font-size:16px}
     button{border:0;background:#0284c7;color:#fff;font-weight:700;margin-top:10px;cursor:pointer}
     input{border:1px solid #475569;background:#0b1220;color:#fff;margin-top:8px}
-    #reader{width:100%;border-radius:12px;overflow:hidden;background:#000;margin-top:12px;position:relative}
+    #reader{width:100%;border-radius:12px;overflow:hidden;background:#000;margin-top:12px;position:relative;min-height:250px}
     #reader video{width:100% !important;height:auto !important;object-fit:cover;display:block}
     #status{font-size:14px;margin-top:12px;white-space:pre-wrap;color:#38bdf8}
-    /* Força o overlay do html5-qrcode igual ao PC */
-    #reader__scan_region{position:relative}
-    #reader__scan_region img{display:none}
+    .dica{font-size:12px;color:#94a3b8;margin-top:8px}
   </style>
 </head>
 <body>
@@ -29,8 +27,9 @@
   <p>Aponte a câmera para o código do produto.</p>
   <section class="card">
     <div id="reader"></div>
-    <p id="status">Toque em "Iniciar Leitor" abaixo.</p>
-    <button id="btnIniciar" type="button" onclick="iniciarLeitor()">Iniciar Leitor</button>
+    <p id="status">Iniciando câmera automaticamente...</p>
+    <p class="dica">Aproxime bem do código, mantenha parado e com boa luz.</p>
+    <button id="btnIniciar" type="button" style="display:none;" onclick="iniciarLeitor()">Iniciar Leitor</button>
     <button id="btnTrocar" type="button" style="display:none;background:#475569;" onclick="trocarCamera()">🔄 Trocar Câmera</button>
     <button id="btnTorch" type="button" style="display:none;background:#334155;" onclick="toggleTorch()">🔦 Lanterna</button>
     <button type="button" style="background:#334155;margin-top:10px;" onclick="voltarApp()">Voltar para o Aplicativo</button>
@@ -56,6 +55,7 @@
     pararLeitor();
     atualizarStatus("Código lido: "+codigo+"\nRetornando ao app...");
     if(navigator.vibrate) navigator.vibrate(200);
+    try{ const ctx = new (window.AudioContext || window.webkitAudioContext)(); const o=ctx.createOscillator(); o.frequency.value=900; o.connect(ctx.destination); o.start(); setTimeout(()=>o.stop(),200);}catch(e){}
     const redirect = getRedirectUrl();
     if(redirect){
       try{
@@ -70,56 +70,64 @@
   async function iniciarLeitor(){
     lido = false;
     atualizarStatus(usandoTraseira ? "Iniciando câmera TRASEIRA..." : "Iniciando câmera FRONTAL...");
-    document.getElementById("btnIniciar").disabled = true;
+    document.getElementById("btnIniciar").style.display = "none";
     try{
       if(html5QrCode){ try{ await html5QrCode.stop(); html5QrCode.clear(); }catch(e){} }
       html5QrCode = new Html5Qrcode("reader");
-      // CONFIG IGUAL AO PC - força traseira no celular mas com mesmo visual do PC
+      const formatos = [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ];
       const configCamera = usandoTraseira ? { facingMode: { ideal: "environment" } } : { facingMode: { ideal: "user" } };
       await html5QrCode.start(
         configCamera,
         {
-          fps: 15,
-          // QRBOX IGUAL AO DA SUA FOTO DO PC - retângulo horizontal para código de barras
+          fps: 20,
           qrbox: function(viewfinderWidth, viewfinderHeight){
-            // No PC: 70% da largura, 25% da altura, igual da foto
-            let width = Math.floor(viewfinderWidth * 0.75);
-            let height = Math.floor(viewfinderHeight * 0.25);
-            // Limita tamanho igual PC
-            if(width > 400) width = 400;
-            if(height > 120) height = 120;
-            if(width < 200) width = 200;
-            if(height < 80) height = 80;
+            let width = Math.floor(viewfinderWidth * 0.85);
+            let height = Math.floor(viewfinderHeight * 0.35);
+            if(width > 500) width = 500;
+            if(height > 150) height = 150;
             return { width: width, height: height };
           },
           aspectRatio: 1.7777778,
+          formatsToSupport: formatos,
           experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-          rememberLastUsedCamera: false,
           videoConstraints: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: usandoTraseira ? "environment" : "user"
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            facingMode: usandoTraseira ? "environment" : "user",
+            focusMode: { ideal: "continuous" }
           }
         },
-        (decodedText) => enviarCodigo(decodedText),
+        (decodedText, decodedResult) => {
+          console.log("Código detectado:", decodedText);
+          enviarCodigo(decodedText);
+        },
         (errorMessage) => {}
       );
-      atualizarStatus("Câmera ativa! Posicione o código de barras no centro.");
-      document.getElementById("btnIniciar").textContent = "Parar Câmera";
-      document.getElementById("btnIniciar").disabled = false;
-      document.getElementById("btnIniciar").onclick = pararLeitorManual;
+      atualizarStatus("Câmera ativa! Aproxime do código de barras.");
       document.getElementById("btnTrocar").style.display = "block";
-      
       try{
         const cap = await html5QrCode.getRunningTrackCapabilities();
         if(cap && cap.torch) document.getElementById("btnTorch").style.display = "block";
+        if(cap && cap.focusMode){
+          try{ await html5QrCode.applyVideoConstraints({ advanced: [{ focusMode: "continuous" }] }); }catch(e){}
+        }
       }catch(e){}
     } catch(err){
       console.error(err);
-      atualizarStatus("Erro: " + err.message + "\nTentando outra câmera...");
-      // Fallback tenta câmera oposta
-      usandoTraseira = !usandoTraseira;
-      setTimeout(()=>iniciarLeitor(), 500);
+      atualizarStatus("Erro ao iniciar câmera: " + err.message + "\nToque em Tentar Novamente");
+      document.getElementById("btnIniciar").style.display = "block";
+      document.getElementById("btnIniciar").textContent = "Tentar Novamente";
     }
   }
   async function trocarCamera(){
@@ -141,14 +149,6 @@
       html5QrCode = null;
     }
   }
-  function pararLeitorManual(){
-    pararLeitor();
-    atualizarStatus("Leitor parado.");
-    document.getElementById("btnIniciar").textContent = "Iniciar Leitor";
-    document.getElementById("btnIniciar").onclick = iniciarLeitor;
-    document.getElementById("btnTorch").style.display = "none";
-    document.getElementById("btnTrocar").style.display = "none";
-  }
   function enviarManual(){
     const v = document.getElementById("manualCode").value.trim();
     if(!v){ atualizarStatus("Digite um código antes de enviar."); return; }
@@ -156,6 +156,11 @@
   }
   document.getElementById("manualCode").addEventListener("keydown", e => { if(e.key==="Enter") enviarManual(); });
   window.addEventListener("pagehide", pararLeitor);
+  
+  // AUTO-INICIA O LEITOR ASSIM QUE ABRE A PÁGINA
+  window.addEventListener('DOMContentLoaded', function(){
+    setTimeout(function(){ iniciarLeitor(); }, 500);
+  });
 </script>
 </body>
 </html>
