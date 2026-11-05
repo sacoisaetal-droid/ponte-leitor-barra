@@ -29,10 +29,9 @@
     <div id="reader"></div>
     <p id="status">Iniciando câmera automaticamente...</p>
     <p class="dica">Aproxime bem do código, mantenha parado e com boa luz.</p>
-    <button id="btnIniciar" type="button" style="display:none;" onclick="iniciarLeitor()">Iniciar Leitor</button>
+    <button id="btnIniciar" type="button" style="display:block;" onclick="iniciarLeitor()">Iniciar Leitor</button>
     <button id="btnTrocar" type="button" style="display:none;background:#475569;" onclick="trocarCamera()">🔄 Trocar Câmera</button>
     <button id="btnTorch" type="button" style="display:none;background:#334155;" onclick="toggleTorch()">🔦 Lanterna</button>
-    <button id="btnSom" type="button" style="background:#0f766e;" onclick="ativarSom()">🔊 Ativar som do leitor</button>
     <button type="button" style="background:#334155;margin-top:10px;" onclick="voltarApp()">Voltar para o Aplicativo</button>
   </section>
   <section class="card">
@@ -47,49 +46,46 @@
   let torchOn = false;
   let lido = false;
   let usandoTraseira = true;
-  let audioContexto = null;
-  let somAtivado = false;
+  let contextoAudio = null;
+  let audioLiberado = false;
 
-  // O iPhone só libera áudio após uma ação explícita do usuário.
-  async function ativarSom(){
-    try{
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if(!AudioCtx) throw new Error("Áudio não suportado neste navegador.");
-      if(!audioContexto) audioContexto = new AudioCtx();
-      if(audioContexto.state === "suspended") await audioContexto.resume();
-      const oscilador = audioContexto.createOscillator();
-      const ganho = audioContexto.createGain();
+  // No iPhone, o áudio precisa ser liberado durante um toque do usuário.
+  // O mesmo toque que inicia a câmera libera o som; não há botão de som separado.
+  async function liberarAudioNoToque(){
+    try {
+      const AudioContexto = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContexto) return;
+      if (!contextoAudio) contextoAudio = new AudioContexto();
+      if (contextoAudio.state === "suspended") await contextoAudio.resume();
+
+      const oscilador = contextoAudio.createOscillator();
+      const ganho = contextoAudio.createGain();
       ganho.gain.value = 0.0001;
-      oscilador.frequency.value = 440;
       oscilador.connect(ganho);
-      ganho.connect(audioContexto.destination);
+      ganho.connect(contextoAudio.destination);
       oscilador.start();
-      oscilador.stop(audioContexto.currentTime + 0.02);
-      somAtivado = audioContexto.state === "running";
-      const botao = document.getElementById("btnSom");
-      if(botao){
-        botao.textContent = somAtivado ? "🔊 Som ativado" : "🔇 Toque para ativar o som";
-        botao.style.background = somAtivado ? "#166534" : "#0f766e";
-      }
-    }catch(e){
-      atualizarStatus("Não foi possível ativar o som neste navegador. A leitura continuará funcionando.");
+      oscilador.stop(contextoAudio.currentTime + 0.02);
+      audioLiberado = contextoAudio.state === "running";
+    } catch (e) {
+      audioLiberado = false;
     }
   }
+
   function tocarBip(){
-    if(!somAtivado || !audioContexto || audioContexto.state !== "running") return;
-    try{
-      const oscilador = audioContexto.createOscillator();
-      const ganho = audioContexto.createGain();
+    if (!audioLiberado || !contextoAudio || contextoAudio.state !== "running") return;
+    try {
+      const oscilador = contextoAudio.createOscillator();
+      const ganho = contextoAudio.createGain();
       oscilador.type = "sine";
       oscilador.frequency.value = 900;
-      ganho.gain.setValueAtTime(0.0001, audioContexto.currentTime);
-      ganho.gain.exponentialRampToValueAtTime(0.25, audioContexto.currentTime + 0.01);
-      ganho.gain.exponentialRampToValueAtTime(0.0001, audioContexto.currentTime + 0.18);
+      ganho.gain.setValueAtTime(0.0001, contextoAudio.currentTime);
+      ganho.gain.exponentialRampToValueAtTime(0.22, contextoAudio.currentTime + 0.01);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, contextoAudio.currentTime + 0.18);
       oscilador.connect(ganho);
-      ganho.connect(audioContexto.destination);
+      ganho.connect(contextoAudio.destination);
       oscilador.start();
-      oscilador.stop(audioContexto.currentTime + 0.2);
-    }catch(e){}
+      oscilador.stop(contextoAudio.currentTime + 0.2);
+    } catch (e) {}
   }
 
   function getRedirectUrl(){ return new URLSearchParams(window.location.search).get("redirect") || ""; }
@@ -114,6 +110,9 @@
     }
   }
   async function iniciarLeitor(){
+    // Executado diretamente pelo toque em "Iniciar Leitor" (ou "Tentar Novamente").
+    // Assim o som fica liberado para todas as leituras desta sessão.
+    await liberarAudioNoToque();
     lido = false;
     atualizarStatus(usandoTraseira ? "Iniciando câmera TRASEIRA..." : "Iniciando câmera FRONTAL...");
     document.getElementById("btnIniciar").style.display = "none";
@@ -203,10 +202,10 @@
   document.getElementById("manualCode").addEventListener("keydown", e => { if(e.key==="Enter") enviarManual(); });
   window.addEventListener("pagehide", pararLeitor);
   
-  // AUTO-INICIA O LEITOR ASSIM QUE ABRE A PÁGINA
+  // No iPhone, um toque inicial é necessário para liberar o áudio.
+  // Depois desse único toque, todos os códigos lidos emitem bip automaticamente.
   window.addEventListener('DOMContentLoaded', function(){
-    atualizarStatus("Câmera iniciando. No iPhone, toque em “Ativar som do leitor” uma vez para liberar o bip.");
-    setTimeout(function(){ iniciarLeitor(); }, 500);
+    atualizarStatus("Toque em Iniciar Leitor uma vez. Depois, cada leitura emitirá o bip automaticamente.");
   });
 </script>
 </body>
